@@ -166,6 +166,13 @@ public class BlockSimulatorTest {
   }
 
   @Test
+  public void shouldSurfaceInsufficientFundsForTransferAsUpfrontCostExceedsBalance() {
+    assertInvalidTransactionMapsToError(
+        TransactionInvalidReason.INSUFFICIENT_FUNDS_FOR_TRANSFER,
+        BlockStateCallError.UPFRONT_COST_EXCEEDS_BALANCE);
+  }
+
+  @Test
   public void shouldSurfaceNonceTooLowFromTransactionSimulation() {
     assertInvalidTransactionMapsToError(
         TransactionInvalidReason.NONCE_TOO_LOW, BlockStateCallError.NONCE_TOO_LOW);
