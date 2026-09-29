@@ -18,6 +18,7 @@ import org.hyperledger.besu.datatypes.Log;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.mainnet.AbstractBlockProcessor;
+import org.hyperledger.besu.ethereum.mainnet.BlockGasAccountingStrategy;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
@@ -39,16 +40,20 @@ public class BlockStateCallSimulationResult {
   private final List<TransactionSimulatorResultWithMetadata> transactionSimulatorResults =
       new ArrayList<>();
   private long cumulativeGasUsed = 0;
+  private long cumulativeExecutionGasUsed = 0;
+  private long cumulativeStateGasUsed = 0;
   private Optional<BlockAccessList> blockAccessList = Optional.empty();
   private final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory;
   private final long blockGasLimit;
   private long blobCount = 0;
   private final GasCalculator gasCalculator;
+  private final BlockGasAccountingStrategy blockGasAccountingStrategy;
 
   public BlockStateCallSimulationResult(final ProtocolSpec protocolSpec, final long blockGasLimit) {
     this.transactionReceiptFactory = protocolSpec.getTransactionReceiptFactory();
     this.blockGasLimit = blockGasLimit;
     this.gasCalculator = protocolSpec.getGasCalculator();
+    this.blockGasAccountingStrategy = protocolSpec.getBlockGasAccountingStrategy();
   }
 
   public long getRemainingGas() {
@@ -57,6 +62,16 @@ public class BlockStateCallSimulationResult {
 
   public long getCumulativeGasUsed() {
     return cumulativeGasUsed;
+  }
+
+  /**
+   * Returns the block header gas used, computed with the block gas accounting of the fork.
+   *
+   * @return the block gas used
+   */
+  public long getBlockGasUsed() {
+    return blockGasAccountingStrategy.effectiveGasUsed(
+        cumulativeExecutionGasUsed, cumulativeStateGasUsed);
   }
 
   public long getCumulativeBlobGasUsed() {
@@ -80,6 +95,10 @@ public class BlockStateCallSimulationResult {
 
     long gasUsedByTransaction = result.getGasEstimate();
     cumulativeGasUsed += gasUsedByTransaction;
+    cumulativeExecutionGasUsed +=
+        blockGasAccountingStrategy.calculateTransactionExecutionGas(
+            result.transaction(), result.result());
+    cumulativeStateGasUsed += result.result().getStateGasUsed();
 
     if (result.transaction().getType().supportsBlob()) {
       blobCount += result.transaction().getBlobCount();

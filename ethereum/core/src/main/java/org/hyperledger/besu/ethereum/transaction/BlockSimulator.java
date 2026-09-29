@@ -217,7 +217,7 @@ public class BlockSimulator {
       BlockHeader resultBlockHeader = result.getBlock().getHeader();
       blockHashCache.put(resultBlockHeader.getNumber(), resultBlockHeader.getHash());
       currentBlockHeader = resultBlockHeader;
-      simulationCumulativeGasUsed += resultBlockHeader.getGasUsed();
+      simulationCumulativeGasUsed += result.getCumulativeGasUsed();
     }
     return results;
   }
@@ -307,7 +307,7 @@ public class BlockSimulator {
             protocolSpec,
             blockHashLookup,
             operationTracer,
-            Optional.empty());
+            blockAccessListBuilder);
 
     // if operationTracer is block-aware, traceStart and hold onto the option ref for traceEnd
     var maybeBlockAwareOperationTracer =
@@ -366,6 +366,7 @@ public class BlockSimulator {
         tracker ->
             blockAccessListBuilder.ifPresent(
                 builder -> builder.apply(tracker, ws.updater().updater())));
+    blockAccessListBuilder.ifPresent(b -> blockStateCallSimulationResult.set(b.build()));
 
     // Apply block reward for PoW blocks, matching geth's FinalizeAndAssemble behaviour.
     // Post-merge specs have blockReward=ZERO and skipZeroBlockRewards=true, so no reward is
@@ -518,7 +519,6 @@ public class BlockSimulator {
       blockStateCallSimulationResult.add(transactionSimulationResult, ws, finalOperationTracer);
     }
 
-    blockAccessListBuilder.ifPresent(b -> blockStateCallSimulationResult.set(b.build()));
     return blockStateCallSimulationResult;
   }
 
@@ -584,7 +584,7 @@ public class BlockSimulator {
             .transactionsRoot(BodyValidation.transactionsRoot(transactions))
             .receiptsRoot(BodyValidation.receiptsRoot(receipts))
             .logsBloom(BodyValidation.logsBloom(receipts))
-            .gasUsed(simResult.getCumulativeGasUsed())
+            .gasUsed(simResult.getBlockGasUsed())
             .requestsHash(maybeRequests.map(BodyValidation::requestsHash).orElse(null))
             .balHash(simResult.getBlockAccessList().map(BodyValidation::balHash).orElse(null))
             .extraData(blockOverrides.getExtraData().orElse(Bytes.EMPTY))
@@ -697,7 +697,8 @@ public class BlockSimulator {
                                 ? getNextGasLimit(newProtocolSpec, header, blockNumber)
                                 : header.getGasLimit()))
             .extraData(blockOverrides.getExtraData().orElse(Bytes.EMPTY))
-            .prevRandao(blockOverrides.getMixHashOrPrevRandao().orElse(Bytes32.ZERO));
+            .prevRandao(blockOverrides.getMixHashOrPrevRandao().orElse(Bytes32.ZERO))
+            .slotNumber(header.getOptionalSlotNumber().map(slot -> slot + 1).orElse(null));
 
     // London+: baseFee
     if (newProtocolSpec.getFeeMarket().implementsBaseFee()) {

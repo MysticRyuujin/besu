@@ -41,6 +41,8 @@ import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.mainnet.AbstractBlockProcessor;
+import org.hyperledger.besu.ethereum.mainnet.BlockGasAccountingStrategy;
+import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.MiningBeneficiaryCalculator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -124,6 +126,8 @@ public class BlockSimulatorTest {
     when(protocolSpec.getFeeMarket()).thenReturn(mock(FeeMarket.class));
     when(protocolSpec.getPreExecutionProcessor()).thenReturn(mock(PreExecutionProcessor.class));
     when(protocolSpec.getSlotDuration()).thenReturn(Duration.ofSeconds(12));
+    when(protocolSpec.getBlockGasAccountingStrategy())
+        .thenReturn(BlockGasAccountingStrategy.FRONTIER);
     when(gasLimitCalculator.computeExcessBlobGas(anyLong(), anyLong(), anyLong())).thenReturn(0L);
   }
 
@@ -335,6 +339,28 @@ public class BlockSimulatorTest {
         blockSimulator.overrideBlockHeader(
             block1Header, protocolSpec, block2Overrides, false, false);
     assertEquals(expectedFeeRecipient, block2Header.getCoinbase());
+  }
+
+  @Test
+  public void shouldSetSlotNumberFromParentSlotNumber() {
+    BlockOverrides overrides = BlockOverrides.builder().timestamp(1L).blockNumber(1L).build();
+
+    BlockHeader parentWithSlot =
+        BlockHeaderBuilder.fromHeader(blockHeader)
+            .slotNumber(41L)
+            .blockHeaderFunctions(new MainnetBlockHeaderFunctions())
+            .buildBlockHeader();
+    assertEquals(
+        Optional.of(42L),
+        blockSimulator
+            .overrideBlockHeader(parentWithSlot, protocolSpec, overrides, false, false)
+            .getOptionalSlotNumber());
+
+    assertEquals(
+        Optional.empty(),
+        blockSimulator
+            .overrideBlockHeader(blockHeader, protocolSpec, overrides, false, false)
+            .getOptionalSlotNumber());
   }
 
   @Test
