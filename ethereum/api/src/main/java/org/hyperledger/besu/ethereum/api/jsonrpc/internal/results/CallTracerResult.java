@@ -502,7 +502,7 @@ public class CallTracerResult {
     }
 
     /**
-     * Number of nested calls added so far
+     * Number of nested calls added so far.
      *
      * @return the number of nested calls
      */

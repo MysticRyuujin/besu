@@ -31,6 +31,7 @@ import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.api.query.TransactionReceiptWithMetadata;
 import org.hyperledger.besu.ethereum.api.query.TransactionWithMetadata;
 import org.hyperledger.besu.ethereum.debug.TraceOptions;
+import org.hyperledger.besu.ethereum.debug.TracerType;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.Optional;
@@ -103,10 +104,13 @@ public class DebugTraceTransaction implements JsonRpcMethod {
       final TraceOptions traceOptions) {
     final Hash blockHash = transactionWithMetadata.getBlockHash().get();
     final int logIndexOffset =
-        blockchain
-            .transactionReceiptByTransactionHash(txHash, protocolSchedule)
-            .map(TransactionReceiptWithMetadata::getLogIndexOffset)
-            .orElse(0);
+        traceOptions.tracerType() == TracerType.CALL_TRACER
+                && traceOptions.tracerConfigFlag("withLog")
+            ? blockchain
+                .transactionReceiptByTransactionHash(txHash, protocolSchedule)
+                .map(TransactionReceiptWithMetadata::getLogIndexOffset)
+                .orElse(0)
+            : 0;
     return blockchain
         .getBlockchain()
         .getBlockHeader(blockHash)

@@ -457,6 +457,8 @@ class CallTracerTest {
     tracer.traceContextEnter(child);
     final Log nested = emitLog(tracer, child, 0xb);
     tracer.traceContextExit(child);
+    when(root.getLogs()).thenReturn(List.of(nested));
+    tracer.traceContextReEnter(root);
     final Log last = emitLog(tracer, root, 0xc);
     tracer.traceContextExit(root);
 
@@ -467,6 +469,60 @@ class CallTracerTest {
     assertThat(callResult.getCalls()).isNull();
     assertThat(callResult.getLogs()).extracting(CallLog::getIndex).containsExactly("0x1");
     assertThat(callResult.getLogs()).extracting(CallLog::getPosition).containsExactly("0x0");
+  }
+
+  @Test
+  @DisplayName("withLog attributes logs added after the root frame exits to the root frame")
+  void withLogAttributesClosureLogsToRoot() {
+    final CallTracer tracer = new CallTracer(withLogOptions(false), 2);
+    final MessageFrame root = frame(Address.fromHexString("0x00"), Address.fromHexString("0x01"));
+    final MessageFrame child = frame(Address.fromHexString("0x01"), Address.fromHexString("0x02"));
+    when(child.getDepth()).thenReturn(1);
+    final Transaction tx = mockTransaction();
+    tracer.traceStartTransaction(null, tx);
+    tracer.traceContextEnter(root);
+    final Log first = emitLog(tracer, root, 0xa);
+    tracer.traceContextEnter(child);
+    tracer.traceContextExit(child);
+    tracer.traceContextReEnter(root);
+    tracer.traceContextExit(root);
+    // EIP-7708 closure log, added to the initial frame after its execution ended
+    final Log closure = addLog(root, 0xd);
+
+    final TransactionProcessingResult result = mockResult(21_000L, true);
+    when(result.getLogs()).thenReturn(List.of(first, closure));
+    final CallTracerResult callResult = tracer.buildResult(tx, result);
+
+    assertThat(callResult.getLogs()).extracting(CallLog::getIndex).containsExactly("0x2", "0x3");
+    assertThat(callResult.getLogs()).extracting(CallLog::getPosition).containsExactly("0x0", "0x1");
+    assertThat(callResult.getCalls().get(0).getLogs()).isNullOrEmpty();
+  }
+
+  @Test
+  @DisplayName("onlyTopCall with withLog attributes closure logs to the root at position 0")
+  void onlyTopCallWithLogAttributesClosureLogsToRoot() {
+    final CallTracer tracer = new CallTracer(withLogOptions(true), 0);
+    final MessageFrame root = frame(Address.fromHexString("0x00"), Address.fromHexString("0x01"));
+    final MessageFrame child = frame(Address.fromHexString("0x01"), Address.fromHexString("0x02"));
+    when(child.getDepth()).thenReturn(1);
+    final Transaction tx = mockTransaction();
+    tracer.traceStartTransaction(null, tx);
+    tracer.traceContextEnter(root);
+    tracer.traceContextEnter(child);
+    final Log nested = emitLog(tracer, child, 0xb);
+    tracer.traceContextExit(child);
+    when(root.getLogs()).thenReturn(List.of(nested));
+    tracer.traceContextReEnter(root);
+    tracer.traceContextExit(root);
+    final Log closure = addLog(root, 0xd);
+
+    final TransactionProcessingResult result = mockResult(21_000L, true);
+    when(result.getLogs()).thenReturn(List.of(nested, closure));
+    final CallTracerResult callResult = tracer.buildResult(tx, result);
+
+    assertThat(callResult.getLogs()).extracting(CallLog::getIndex).containsExactly("0x1");
+    assertThat(callResult.getLogs()).extracting(CallLog::getPosition).containsExactly("0x0");
+    assertThat(callResult.getLogs().get(0).getData()).isEqualTo("0x0d");
   }
 
   @Test

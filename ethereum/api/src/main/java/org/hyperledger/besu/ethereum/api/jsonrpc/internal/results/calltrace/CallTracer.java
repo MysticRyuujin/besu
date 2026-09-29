@@ -84,6 +84,9 @@ public class CallTracer implements OperationTracer {
   private String rootType;
   private long rootGas;
   private CallTracerResult.Builder rootBuilder;
+  // Logs added to the initial frame after the root frame exits (EIP-7708 closure logs) follow
+  // this many logs; geth attributes them to the root frame.
+  private int rootLogsAtExit;
 
   // Captured in tracePreExecution for the CALL/CREATE/SELFDESTRUCT opcode about to run on the
   // *current* frame; consumed immediately afterwards by traceContextEnter (real entry),
@@ -134,6 +137,7 @@ public class CallTracer implements OperationTracer {
     this.rootType = transaction.isContractCreation() ? CREATE : CALL;
     this.rootGas = transaction.getGasLimit();
     this.rootBuilder = null;
+    this.rootLogsAtExit = 0;
     this.pendingBuilder = null;
     this.pendingInOffset = 0L;
     this.pendingInLength = 0L;
@@ -160,7 +164,7 @@ public class CallTracer implements OperationTracer {
 
   @Override
   public void tracePostExecution(final MessageFrame frame, final Operation.OperationResult result) {
-    if (withLog && !callStack.isEmpty() && (!onlyTopCall || frame.getDepth() == 0)) {
+    if (recordsLogsOf(frame)) {
       recordNewLogs(callStack.peek(), frame);
     }
     if (onlyTopCall) {
@@ -266,7 +270,7 @@ public class CallTracer implements OperationTracer {
 
   @Override
   public void traceContextReEnter(final MessageFrame frame) {
-    if (withLog && !callStack.isEmpty() && (!onlyTopCall || frame.getDepth() == 0)) {
+    if (recordsLogsOf(frame)) {
       // The completed child's logs were just merged into this frame; they are not its own.
       callStack.peek().logsSeen = frame.getLogs().size();
     }
@@ -284,6 +288,7 @@ public class CallTracer implements OperationTracer {
     finalizeNode(node, frame);
     if (callStack.isEmpty()) {
       rootBuilder = node.builder;
+      rootLogsAtExit = frame.getLogs().size();
     } else {
       callStack.peek().builder.addCall(node.builder.build());
     }
@@ -326,9 +331,16 @@ public class CallTracer implements OperationTracer {
     if (!result.isSuccessful()) {
       applyRootError(tx, result);
     }
+    final List<Log> effectiveLogs = result.getLogs();
+    if (withLog) {
+      for (int i = rootLogsAtExit; i < effectiveLogs.size(); i++) {
+        final CallLog callLog = new CallLog(effectiveLogs.get(i), rootBuilder.callCount());
+        rootBuilder.addLog(callLog);
+        emittedLogs.put(effectiveLogs.get(i), callLog);
+      }
+    }
     final CallTracerResult root = rootBuilder.build();
     if (withLog) {
-      final List<Log> effectiveLogs = result.getLogs();
       for (int i = 0; i < effectiveLogs.size(); i++) {
         final CallLog callLog = emittedLogs.get(effectiveLogs.get(i));
         if (callLog != null) {
@@ -338,6 +350,10 @@ public class CallTracer implements OperationTracer {
       dropRevertedLogs(root);
     }
     return root;
+  }
+
+  private boolean recordsLogsOf(final MessageFrame frame) {
+    return withLog && !callStack.isEmpty() && (!onlyTopCall || frame.getDepth() == 0);
   }
 
   private void recordNewLogs(final Node node, final MessageFrame frame) {
