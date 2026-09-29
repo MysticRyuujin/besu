@@ -410,7 +410,7 @@ public class BlockSimulator {
 
     BlockStateCallSimulationResult blockStateCallSimulationResult =
         new BlockStateCallSimulationResult(
-            protocolSpec, calculateSimulationGasCap(blockHeader, simulationCumulativeGasUsed));
+            protocolSpec, blockHeader.getGasLimit(), remainingRpcGas(simulationCumulativeGasUsed));
 
     MiningBeneficiaryCalculator miningBeneficiaryCalculator =
         blockStateCall
@@ -849,12 +849,13 @@ public class BlockSimulator {
     };
   }
 
-  public long calculateSimulationGasCap(
-      final BlockHeader blockHeader, final long simulationCumulativeGasUsed) {
-    if (rpcGasCap > 0) {
-      long remainingGas = Math.max(rpcGasCap - simulationCumulativeGasUsed, 0);
-      return Math.min(remainingGas, blockHeader.getGasLimit());
-    }
-    return blockHeader.getGasLimit();
+  /**
+   * Returns the gas that the calls of the simulation may still use under the RPC gas cap.
+   *
+   * @param simulationCumulativeGasUsed the receipt gas that earlier blocks of the simulation used
+   * @return the remaining gas, or {@link Long#MAX_VALUE} without an RPC gas cap
+   */
+  public long remainingRpcGas(final long simulationCumulativeGasUsed) {
+    return rpcGasCap > 0 ? Math.max(rpcGasCap - simulationCumulativeGasUsed, 0) : Long.MAX_VALUE;
   }
 }

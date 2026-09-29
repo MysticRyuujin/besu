@@ -57,6 +57,8 @@ import org.hyperledger.besu.ethereum.transaction.exceptions.BlockStateCallExcept
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateQueryParams;
 import org.hyperledger.besu.evm.account.MutableAccount;
+import org.hyperledger.besu.evm.gascalculator.GasCalculator;
+import org.hyperledger.besu.evm.gascalculator.StateGasCostCalculator;
 import org.hyperledger.besu.evm.log.EIP7708TransferLogEmitter;
 import org.hyperledger.besu.evm.log.TransferLogEmitter;
 import org.hyperledger.besu.evm.tracing.EthTransferLogOperationTracer;
@@ -128,6 +130,9 @@ public class BlockSimulatorTest {
     when(protocolSpec.getSlotDuration()).thenReturn(Duration.ofSeconds(12));
     when(protocolSpec.getBlockGasAccountingStrategy())
         .thenReturn(BlockGasAccountingStrategy.FRONTIER);
+    GasCalculator gasCalculator = mock(GasCalculator.class);
+    when(gasCalculator.stateGasCostCalculator()).thenReturn(StateGasCostCalculator.NONE);
+    when(protocolSpec.getGasCalculator()).thenReturn(gasCalculator);
     when(gasLimitCalculator.computeExcessBlobGas(anyLong(), anyLong(), anyLong())).thenReturn(0L);
   }
 
@@ -521,6 +526,7 @@ public class BlockSimulatorTest {
 
     Transaction tx = mock(Transaction.class);
     when(tx.getType()).thenReturn(TransactionType.FRONTIER);
+    when(tx.getGasLimit()).thenReturn(21_000L);
 
     TransactionProcessingResult processingResult = mock(TransactionProcessingResult.class);
     when(processingResult.getPartialBlockAccessView()).thenReturn(Optional.empty());
