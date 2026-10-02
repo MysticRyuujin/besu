@@ -130,7 +130,8 @@ public class CallTracerResult {
     this.error = builder.error;
     this.revertReason = builder.revertReason;
     this.calls = builder.calls;
-    this.logs = builder.logs;
+    // Copy so that post-build pruning (dropRevertedLogs) cannot mutate the builder's list.
+    this.logs = builder.logs == null ? null : new ArrayList<>(builder.logs);
   }
 
   /** Default constructor required for Jackson JSON deserialization. */
