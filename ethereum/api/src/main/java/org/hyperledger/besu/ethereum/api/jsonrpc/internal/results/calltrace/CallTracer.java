@@ -385,11 +385,17 @@ public class CallTracer implements OperationTracer {
     if (tx.isContractCreation()) {
       rootBuilder.to(null);
       result.getRevertReason().ifPresent(rootBuilder::revertReason);
-    } else if (result.getExceptionalHaltReason().isEmpty()
-        && result.getRevertReason().isPresent()) {
-      rootBuilder.output(result.getRevertReason().get().toHexString());
-      JsonRpcErrorResponse.decodeRevertReason(result.getRevertReason().get())
-          .ifPresent(rootBuilder::revertReasonDecoded);
+    } else if (result.getExceptionalHaltReason().isEmpty()) {
+      // Geth omits "output" when the revert carries no return data.
+      result
+          .getRevertReason()
+          .filter(revertBytes -> !revertBytes.isEmpty())
+          .ifPresent(
+              revertBytes -> {
+                rootBuilder.output(revertBytes.toHexString());
+                JsonRpcErrorResponse.decodeRevertReason(revertBytes)
+                    .ifPresent(rootBuilder::revertReasonDecoded);
+              });
     }
   }
 

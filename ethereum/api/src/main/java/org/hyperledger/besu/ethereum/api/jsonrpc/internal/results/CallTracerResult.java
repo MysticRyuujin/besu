@@ -582,7 +582,7 @@ public class CallTracerResult {
   }
 
   /** One log of a call frame, as reported by the callTracer withLog option. */
-  @JsonPropertyOrder({"address", "topics", "data", "position", "index"})
+  @JsonPropertyOrder({"address", "topics", "data", "index", "position"})
   public static class CallLog {
     private final String address;
     private final List<String> topics;
